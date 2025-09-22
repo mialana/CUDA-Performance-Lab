@@ -26,13 +26,15 @@ struct DIMS1D
     int dimBlocks;
 };
 
-#define CUDA(call) do {                                 \
-    cudaError_t e = (call);                             \
-    if (e == cudaSuccess) break;                        \
-    fprintf(stderr, __FILE__":%d: %s (%d)\n",           \
-            __LINE__, cudaGetErrorString(e), e);        \
-    exit(1);                                            \
-} while (0)
+#define CUDA(call) \
+    do \
+    { \
+        cudaError_t e = (call); \
+        if (e == cudaSuccess) \
+            break; \
+        fprintf(stderr, __FILE__ ":%d: %s (%d)\n", __LINE__, cudaGetErrorString(e), e); \
+        exit(1); \
+    } while (0)
 
 inline unsigned divup(unsigned n, unsigned div)
 {
@@ -44,39 +46,46 @@ void printResults(double timeInMilliseconds, int iterations)
     // print out the time required for the kernel to finish the transpose operation
     double bandwidth = (iterations * 1e-9 * (double)(n_elements * sizeof(float)))
                        / (timeInMilliseconds * 1e-3);
-    std::cout << "Elapsed Time for " << iterations << " runs = " << round(timeInMilliseconds) << "ms" << std::endl;
+    std::cout << "Elapsed Time for " << iterations << " runs = " << round(timeInMilliseconds)
+              << "ms" << std::endl;
     std::cout << termcolor::bold << termcolor::red << termcolor::on_white
-              << "Bandwidth (GB/s) = " << std::setprecision(4) << bandwidth
-              << termcolor::reset << std::endl;
+              << "Bandwidth (GB/s) = " << std::setprecision(4) << bandwidth << termcolor::reset
+              << std::endl;
     std::cout.clear();
 }
 
 // Check errors
-bool postprocess(const float *ref, const float *res, int n)
+bool postprocess(const float* ref, const float* res, int n)
 {
     bool passed = true;
-    for(int i = 0; i < n; i++)
+    for (int i = 0; i < n; i++)
     {
         if (std::abs(res[i] - ref[i]) / n_elements > 1e-6)
         {
             std::cout.precision(6);
             std::cout << "ID: " << i << " \t Res: " << res[i] << " \t Ref: " << ref[i] << std::endl;
-            std::cout << termcolor::blink << termcolor::white << termcolor::on_red << "*** FAILED ***" << termcolor::reset << std::endl;
+            std::cout << termcolor::blink << termcolor::white << termcolor::on_red
+                      << "*** FAILED ***" << termcolor::reset << std::endl;
             passed = false;
             break;
         }
     }
-    if(passed)
-        std::cout << termcolor::green << "Post process check passed!!" << termcolor::reset << std::endl;
+    if (passed)
+    {
+        std::cout << termcolor::green << "Post process check passed!!" << termcolor::reset
+                  << std::endl;
+    }
 
     return passed;
 }
 
-static float reduce_cpu(const float *data, int n)
+static float reduce_cpu(const float* data, int n)
 {
     float sum = 0;
     for (int i = 0; i < n; i++)
+    {
         sum += data[i];
+    }
     return sum;
 }
 
@@ -172,6 +181,7 @@ __global__ void reduce_stage2(const float* d_idata, float* d_odata, int n)
 // Each block does work of stage3_TILE * blockDim.x elements
 ////////////////////////////////////////////////////////////////////////////////
 const int stage3_TILE = 2;
+
 __global__ void reduce_stage3(const float* d_idata, float* d_odata, int n)
 {
     // Allocate dynamic shared memory
@@ -184,19 +194,19 @@ __global__ void reduce_stage3(const float* d_idata, float* d_odata, int n)
 
     // Reduce the block same as reduce_stage2
 
-    //Copy result of reduction to global memory - Same as reduce_stage2
+    // Copy result of reduction to global memory - Same as reduce_stage2
 }
 
 // warpReduce function for reduce_stag4 that reduces 2 warps into one value
 __device__ void warpReduce(volatile float* smem, int tid)
 {
-    //Write code for warp reduce here
+    // Write code for warp reduce here
     smem[tid] += smem[tid + 32];
     smem[tid] += smem[tid + 16];
-    smem[tid] += smem[tid + 8 ];
-    smem[tid] += smem[tid + 4 ];
-    smem[tid] += smem[tid + 2 ];
-    smem[tid] += smem[tid + 1 ];
+    smem[tid] += smem[tid + 8];
+    smem[tid] += smem[tid + 4];
+    smem[tid] += smem[tid + 2];
+    smem[tid] += smem[tid + 1];
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -213,6 +223,7 @@ __device__ void warpReduce(volatile float* smem, int tid)
 // This kernel also uses the warpReduce device function above
 ////////////////////////////////////////////////////////////////////////////////
 const int stage4_TILE = 2;
+
 __global__ void reduce_stage4(const float* d_idata, float* d_odata, int n)
 {
     // Allocate dynamic shared memory, Calculate 1D Index and
@@ -249,6 +260,7 @@ __global__ void reduce_stage4(const float* d_idata, float* d_odata, int n)
 // This kernel also uses the warpReduce device function above
 ////////////////////////////////////////////////////////////////////////////////
 const int stage5_TILE = 2;
+
 template<unsigned int blockSize>
 __global__ void reduce_stage5(const float* d_idata, float* d_odata, int n)
 {
@@ -279,7 +291,7 @@ int main()
 
     // Allocate memory and initialize elements
     // Let's use pinned memory for host
-    float *h_idata;
+    float* h_idata;
     CUDA(cudaMallocHost((void**)&h_idata, bytes));
 
     // Fill random values into the host array
@@ -288,14 +300,15 @@ int main()
         std::mt19937 generator(randomDevice());
         std::uniform_real_distribution<float> distribution(-1, 1);
 
-        for (int i = 0; i < n_elements; i++) {
+        for (int i = 0; i < n_elements; i++)
+        {
             h_idata[i] = distribution(generator);
         }
     }
 
     // Copy input data into device memory
-    float *d_idata = NULL;
-    CUDA(cudaMalloc((void **)&d_idata, bytes));
+    float* d_idata = NULL;
+    CUDA(cudaMalloc((void**)&d_idata, bytes));
     CUDA(cudaMemcpy(d_idata, h_idata, bytes, cudaMemcpyHostToDevice));
 
     // Compute Gold Standard using CPU
@@ -319,17 +332,19 @@ int main()
         // start the timer
         Timer hTimer;
         nvtxRangeId_t rangeBenchmark = nvtxRangeStart("CPU Reduce Benchmark");
-        for(int k = 0; k < iterations; k++)
+        for (int k = 0; k < iterations; k++)
         {
             cpu_result = reduce_cpu(h_idata, n_elements);
         }
         nvtxRangeEnd(rangeBenchmark);
 
         // stop the timer
-        double time = hTimer.elapsed() * 1000; //ms
+        double time = hTimer.elapsed() * 1000;  // ms
 
-        if(postprocess(&cpu_result, &gold_result, 1))
+        if (postprocess(&cpu_result, &gold_result, 1))
+        {
             printResults(time, iterations);
+        }
 
         nvtxRangeEnd(range);
     }
@@ -342,10 +357,10 @@ int main()
     {
         nvtxRangeId_t range = nvtxRangeStart("Reduction Stage 0");
 
-        //Calculate Threads per block and total blocks required
+        // Calculate Threads per block and total blocks required
         DIMS1D dims;
         dims.dimThreads = threads;
-        dims.dimBlocks  = divup(n_elements, dims.dimThreads);
+        dims.dimBlocks = divup(n_elements, dims.dimThreads);
 
         // Copy input data to device
         CUDA(cudaMemcpy(d_idata, h_idata, bytes, cudaMemcpyHostToDevice));
@@ -354,40 +369,49 @@ int main()
         size_t block_bytes = dims.dimBlocks * sizeof(float);
 
         // Allocate memory for output on device
-        float *d_odata = NULL;
+        float* d_odata = NULL;
         CUDA(cudaMalloc((void**)&d_odata, block_bytes));
         CUDA(cudaMemset(d_odata, 0, block_bytes));
 
         // Call the kernel. Allocate dynamic shared memory
-        reduce_stage0<<<dims.dimBlocks, dims.dimThreads, sizeof(float) * dims.dimThreads>>>(d_idata, d_odata, n_elements);
+        reduce_stage0<<<dims.dimBlocks, dims.dimThreads, sizeof(float) * dims.dimThreads>>>(
+            d_idata, d_odata, n_elements);
 
         // Copy result of block reduce to CPU and run CPU reduce
-        float *h_blocks = (float *)malloc(dims.dimBlocks * sizeof(float));
+        float* h_blocks = (float*)malloc(dims.dimBlocks * sizeof(float));
         CUDA(cudaMemcpy(h_blocks, d_odata, dims.dimBlocks * sizeof(float), cudaMemcpyDeviceToHost));
 
         // Secondary reduce on CPU
         float gpu_result = 0;
-        for(int i = 0; i < dims.dimBlocks; i++)
+        for (int i = 0; i < dims.dimBlocks; i++)
+        {
             gpu_result += h_blocks[i];
+        }
 
         // Check the result and then run the benchmark.
-        if(postprocess(&gpu_result, &gold_result, 1))
+        if (postprocess(&gpu_result, &gold_result, 1))
         {
             nvtxRangeId_t rangeBenchmark = nvtxRangeStart("Reduction Stage 0 Benchmark");
 
-            //Start Benchmark
+            // Start Benchmark
             int iterations = 10;
             CUDA(cudaEventRecord(start, 0));
 
             // Run multiple times for a good benchmark
-            for(int i = 0; i < iterations; i++)
+            for (int i = 0; i < iterations; i++)
             {
-                reduce_stage0<<<dims.dimBlocks, dims.dimThreads, sizeof(float) * dims.dimThreads>>>(d_idata, d_odata, n_elements);
+                reduce_stage0<<<dims.dimBlocks, dims.dimThreads, sizeof(float) * dims.dimThreads>>>(
+                    d_idata, d_odata, n_elements);
 
-                cudaMemcpy(h_blocks, d_odata, dims.dimBlocks * sizeof(float), cudaMemcpyDeviceToHost);
+                cudaMemcpy(h_blocks,
+                           d_odata,
+                           dims.dimBlocks * sizeof(float),
+                           cudaMemcpyDeviceToHost);
 
-                for(int i = 0; i < dims.dimBlocks; i++)
+                for (int i = 0; i < dims.dimBlocks; i++)
+                {
                     gpu_result += h_blocks[i];
+                }
             }
 
             CUDA(cudaEventRecord(stop, 0));
@@ -416,10 +440,10 @@ int main()
     {
         nvtxRangeId_t range = nvtxRangeStart("Reduction Stage 1");
 
-        //Calculate Threads per block and total blocks required
+        // Calculate Threads per block and total blocks required
         DIMS1D dims;
         dims.dimThreads = threads;
-        dims.dimBlocks  = divup(n_elements, dims.dimThreads);
+        dims.dimBlocks = divup(n_elements, dims.dimThreads);
 
         // Copy input data to device
         CUDA(cudaMemcpy(d_idata, h_idata, bytes, cudaMemcpyHostToDevice));
@@ -428,40 +452,46 @@ int main()
         size_t block_bytes = dims.dimBlocks * sizeof(float);
 
         // Allocate memory for output on device
-        float *d_odata = NULL;
+        float* d_odata = NULL;
         CUDA(cudaMalloc((void**)&d_odata, block_bytes));
         CUDA(cudaMemset(d_odata, 0, block_bytes));
 
         // Call the kernel. Allocate dynamic shared memory
-        reduce_stage1<<<dims.dimBlocks, dims.dimThreads, sizeof(float) * dims.dimThreads>>>(d_idata, d_odata, n_elements);
+        reduce_stage1<<<dims.dimBlocks, dims.dimThreads, sizeof(float) * dims.dimThreads>>>(
+            d_idata, d_odata, n_elements);
 
         // Copy result of block reduce to CPU and run CPU reduce
-        float *h_blocks = (float *)malloc(block_bytes);
+        float* h_blocks = (float*)malloc(block_bytes);
         CUDA(cudaMemcpy(h_blocks, d_odata, block_bytes, cudaMemcpyDeviceToHost));
 
         // Secondary reduce on CPU
         float gpu_result = 0;
-        for(int i = 0; i < dims.dimBlocks; i++)
+        for (int i = 0; i < dims.dimBlocks; i++)
+        {
             gpu_result += h_blocks[i];
+        }
 
         // Check the result and then run the benchmark.
-        if(postprocess(&gpu_result, &gold_result, 1))
+        if (postprocess(&gpu_result, &gold_result, 1))
         {
             nvtxRangeId_t rangeBenchmark = nvtxRangeStart("Reduction Stage 1 Benchmark");
 
-            //Start Benchmark
+            // Start Benchmark
             int iterations = 10;
             CUDA(cudaEventRecord(start, 0));
 
             // Run multiple times for a good benchmark
-            for(int i = 0; i < iterations; i++)
+            for (int i = 0; i < iterations; i++)
             {
-                reduce_stage1<<<dims.dimBlocks, dims.dimThreads, sizeof(float) * dims.dimThreads>>>(d_idata, d_odata, n_elements);
+                reduce_stage1<<<dims.dimBlocks, dims.dimThreads, sizeof(float) * dims.dimThreads>>>(
+                    d_idata, d_odata, n_elements);
 
                 cudaMemcpy(h_blocks, d_odata, block_bytes, cudaMemcpyDeviceToHost);
 
-                for(int i = 0; i < dims.dimBlocks; i++)
+                for (int i = 0; i < dims.dimBlocks; i++)
+                {
                     gpu_result += h_blocks[i];
+                }
             }
 
             CUDA(cudaEventRecord(stop, 0));
@@ -490,10 +520,10 @@ int main()
     {
         nvtxRangeId_t range = nvtxRangeStart("Reduction Stage 2");
 
-        //Calculate Threads per block and total blocks required
+        // Calculate Threads per block and total blocks required
         DIMS1D dims;
         dims.dimThreads = threads;
-        dims.dimBlocks  = divup(n_elements, dims.dimThreads);
+        dims.dimBlocks = divup(n_elements, dims.dimThreads);
 
         // Copy input data to device
         CUDA(cudaMemcpy(d_idata, h_idata, bytes, cudaMemcpyHostToDevice));
@@ -502,40 +532,46 @@ int main()
         size_t block_bytes = dims.dimBlocks * sizeof(float);
 
         // Allocate memory for output on device
-        float *d_odata = NULL;
+        float* d_odata = NULL;
         CUDA(cudaMalloc((void**)&d_odata, block_bytes));
         CUDA(cudaMemset(d_odata, 0, block_bytes));
 
         // Call the kernel. Allocate dynamic shared memory
-        reduce_stage2<<<dims.dimBlocks, dims.dimThreads, sizeof(float) * dims.dimThreads>>>(d_idata, d_odata, n_elements);
+        reduce_stage2<<<dims.dimBlocks, dims.dimThreads, sizeof(float) * dims.dimThreads>>>(
+            d_idata, d_odata, n_elements);
 
         // Copy result of block reduce to CPU and run CPU reduce
-        float *h_blocks = (float *)malloc(block_bytes);
+        float* h_blocks = (float*)malloc(block_bytes);
         CUDA(cudaMemcpy(h_blocks, d_odata, block_bytes, cudaMemcpyDeviceToHost));
 
         // Secondary reduce on CPU
         float gpu_result = 0;
-        for(int i = 0; i < dims.dimBlocks; i++)
+        for (int i = 0; i < dims.dimBlocks; i++)
+        {
             gpu_result += h_blocks[i];
+        }
 
         // Check the result and then run the benchmark.
-        if(postprocess(&gpu_result, &gold_result, 1))
+        if (postprocess(&gpu_result, &gold_result, 1))
         {
             nvtxRangeId_t rangeBenchmark = nvtxRangeStart("Reduction Stage 2 Benchmark");
 
-            //Start Benchmark
+            // Start Benchmark
             int iterations = 10;
             CUDA(cudaEventRecord(start, 0));
 
             // Run multiple times for a good benchmark
-            for(int i = 0; i < iterations; i++)
+            for (int i = 0; i < iterations; i++)
             {
-                reduce_stage2<<<dims.dimBlocks, dims.dimThreads, sizeof(float) * dims.dimThreads>>>(d_idata, d_odata, n_elements);
+                reduce_stage2<<<dims.dimBlocks, dims.dimThreads, sizeof(float) * dims.dimThreads>>>(
+                    d_idata, d_odata, n_elements);
 
                 cudaMemcpy(h_blocks, d_odata, block_bytes, cudaMemcpyDeviceToHost);
 
-                for(int i = 0; i < dims.dimBlocks; i++)
+                for (int i = 0; i < dims.dimBlocks; i++)
+                {
                     gpu_result += h_blocks[i];
+                }
             }
 
             CUDA(cudaEventRecord(stop, 0));
@@ -568,7 +604,7 @@ int main()
         // Use stage3_TILE in your grid calculation
         DIMS1D dims;
         dims.dimThreads = threads;
-        dims.dimBlocks  = divup(n_elements, dims.dimThreads * stage3_TILE);
+        dims.dimBlocks = divup(n_elements, dims.dimThreads * stage3_TILE);
 
         // Copy input data to device
         CUDA(cudaMemcpy(d_idata, h_idata, bytes, cudaMemcpyHostToDevice));
@@ -577,40 +613,46 @@ int main()
         size_t block_bytes = dims.dimBlocks * sizeof(float);
 
         // Allocate memory for output on device
-        float *d_odata = NULL;
+        float* d_odata = NULL;
         CUDA(cudaMalloc((void**)&d_odata, block_bytes));
         CUDA(cudaMemset(d_odata, 0, block_bytes));
 
         // Call the kernel. Allocate dynamic shared memory
-        reduce_stage3<<<dims.dimBlocks, dims.dimThreads, sizeof(float) * dims.dimThreads>>>(d_idata, d_odata, n_elements);
+        reduce_stage3<<<dims.dimBlocks, dims.dimThreads, sizeof(float) * dims.dimThreads>>>(
+            d_idata, d_odata, n_elements);
 
         // Copy result of block reduce to CPU and run CPU reduce
-        float *h_blocks = (float *)malloc(block_bytes);
+        float* h_blocks = (float*)malloc(block_bytes);
         CUDA(cudaMemcpy(h_blocks, d_odata, block_bytes, cudaMemcpyDeviceToHost));
 
         // Secondary reduce on CPU
         float gpu_result = 0;
-        for(int i = 0; i < dims.dimBlocks; i++)
+        for (int i = 0; i < dims.dimBlocks; i++)
+        {
             gpu_result += h_blocks[i];
+        }
 
         // Check the result and then run the benchmark.
-        if(postprocess(&gpu_result, &gold_result, 1))
+        if (postprocess(&gpu_result, &gold_result, 1))
         {
             nvtxRangeId_t rangeBenchmark = nvtxRangeStart("Reduction Stage 3 Benchmark");
 
-            //Start Benchmark
+            // Start Benchmark
             int iterations = 10;
             CUDA(cudaEventRecord(start, 0));
 
             // Run multiple times for a good benchmark
-            for(int i = 0; i < iterations; i++)
+            for (int i = 0; i < iterations; i++)
             {
-                reduce_stage3<<<dims.dimBlocks, dims.dimThreads, sizeof(float) * dims.dimThreads>>>(d_idata, d_odata, n_elements);
+                reduce_stage3<<<dims.dimBlocks, dims.dimThreads, sizeof(float) * dims.dimThreads>>>(
+                    d_idata, d_odata, n_elements);
 
                 cudaMemcpy(h_blocks, d_odata, block_bytes, cudaMemcpyDeviceToHost);
 
-                for(int i = 0; i < dims.dimBlocks; i++)
+                for (int i = 0; i < dims.dimBlocks; i++)
+                {
                     gpu_result += h_blocks[i];
+                }
             }
 
             CUDA(cudaEventRecord(stop, 0));
@@ -644,7 +686,7 @@ int main()
         // Use stage4_TILE in your grid calculation
         DIMS1D dims;
         dims.dimThreads = threads;
-        dims.dimBlocks  = divup(n_elements, dims.dimThreads * stage4_TILE);
+        dims.dimBlocks = divup(n_elements, dims.dimThreads * stage4_TILE);
 
         // Copy input data to device
         CUDA(cudaMemcpy(d_idata, h_idata, bytes, cudaMemcpyHostToDevice));
@@ -653,41 +695,46 @@ int main()
         size_t block_bytes = dims.dimBlocks * sizeof(float);
 
         // Allocate memory for output on device
-        float *d_odata = NULL;
+        float* d_odata = NULL;
         CUDA(cudaMalloc((void**)&d_odata, block_bytes));
         CUDA(cudaMemset(d_odata, 0, block_bytes));
 
         // Call the kernel. Allocate dynamic shared memory
-        reduce_stage4<<<dims.dimBlocks, dims.dimThreads, sizeof(float) * dims.dimThreads>>>(d_idata, d_odata, n_elements);
+        reduce_stage4<<<dims.dimBlocks, dims.dimThreads, sizeof(float) * dims.dimThreads>>>(
+            d_idata, d_odata, n_elements);
 
         // Copy result of block reduce to CPU and run CPU reduce
-        float *h_blocks = (float *)malloc(block_bytes);
+        float* h_blocks = (float*)malloc(block_bytes);
         CUDA(cudaMemcpy(h_blocks, d_odata, block_bytes, cudaMemcpyDeviceToHost));
 
         // Secondary reduce on CPU
         float gpu_result = 0;
-        for(int i = 0; i < dims.dimBlocks; i++)
+        for (int i = 0; i < dims.dimBlocks; i++)
+        {
             gpu_result += h_blocks[i];
+        }
 
         // Check the result and then run the benchmark.
-        if(postprocess(&gpu_result, &gold_result, 1))
+        if (postprocess(&gpu_result, &gold_result, 1))
         {
             nvtxRangeId_t rangeBenchmark = nvtxRangeStart("Reduction Stage 4 Benchmark");
 
-            //Start Benchmark
+            // Start Benchmark
             int iterations = 10;
             CUDA(cudaEventRecord(start, 0));
 
-
             // Run multiple times for a good benchmark
-            for(int i = 0; i < iterations; i++)
+            for (int i = 0; i < iterations; i++)
             {
-                reduce_stage4<<<dims.dimBlocks, dims.dimThreads, sizeof(float) * dims.dimThreads>>>(d_idata, d_odata, n_elements);
+                reduce_stage4<<<dims.dimBlocks, dims.dimThreads, sizeof(float) * dims.dimThreads>>>(
+                    d_idata, d_odata, n_elements);
 
                 cudaMemcpy(h_blocks, d_odata, block_bytes, cudaMemcpyDeviceToHost);
 
-                for(int i = 0; i < dims.dimBlocks; i++)
+                for (int i = 0; i < dims.dimBlocks; i++)
+                {
                     gpu_result += h_blocks[i];
+                }
             }
 
             CUDA(cudaEventRecord(stop, 0));
@@ -721,7 +768,7 @@ int main()
         // Use stage5_TILE in your grid calculation
         DIMS1D dims;
         dims.dimThreads = threads;
-        dims.dimBlocks  = divup(n_elements, dims.dimThreads * stage5_TILE);
+        dims.dimBlocks = divup(n_elements, dims.dimThreads * stage5_TILE);
 
         // Copy input data to device
         CUDA(cudaMemcpy(d_idata, h_idata, bytes, cudaMemcpyHostToDevice));
@@ -730,41 +777,50 @@ int main()
         size_t block_bytes = dims.dimBlocks * sizeof(float);
 
         // Allocate memory for output on device
-        float *d_odata = NULL;
+        float* d_odata = NULL;
         CUDA(cudaMalloc((void**)&d_odata, block_bytes));
         CUDA(cudaMemset(d_odata, 0, block_bytes));
 
         // Call the kernel. Allocate dynamic shared memory
         // Don't forget to add the template
-        reduce_stage5<threads><<<dims.dimBlocks, dims.dimThreads, sizeof(float) * dims.dimThreads>>>(d_idata, d_odata, n_elements);
+        reduce_stage5<threads>
+            <<<dims.dimBlocks, dims.dimThreads, sizeof(float) * dims.dimThreads>>>(d_idata,
+                                                                                   d_odata,
+                                                                                   n_elements);
 
         // Copy result of block reduce to CPU and run CPU reduce
-        float *h_blocks = (float *)malloc(block_bytes);
+        float* h_blocks = (float*)malloc(block_bytes);
         CUDA(cudaMemcpy(h_blocks, d_odata, block_bytes, cudaMemcpyDeviceToHost));
 
         // Secondary reduce on CPU
         float gpu_result = 0;
-        for(int i = 0; i < dims.dimBlocks; i++)
+        for (int i = 0; i < dims.dimBlocks; i++)
+        {
             gpu_result += h_blocks[i];
+        }
 
         // Check the result and then run the benchmark.
-        if(postprocess(&gpu_result, &gold_result, 1))
+        if (postprocess(&gpu_result, &gold_result, 1))
         {
             nvtxRangeId_t rangeBenchmark = nvtxRangeStart("Reduction Stage 5 Benchmark");
 
-            //Start Benchmark
+            // Start Benchmark
             int iterations = 10;
             CUDA(cudaEventRecord(start, 0));
 
             // Run multiple times for a good benchmark
-            for(int i = 0; i < iterations; i++)
+            for (int i = 0; i < iterations; i++)
             {
-                reduce_stage5<threads><<<dims.dimBlocks, dims.dimThreads, sizeof(float) * dims.dimThreads>>>(d_idata, d_odata, n_elements);
+                reduce_stage5<threads>
+                    <<<dims.dimBlocks, dims.dimThreads, sizeof(float) * dims.dimThreads>>>(
+                        d_idata, d_odata, n_elements);
 
                 cudaMemcpy(h_blocks, d_odata, block_bytes, cudaMemcpyDeviceToHost);
 
-                for(int i = 0; i < dims.dimBlocks; i++)
+                for (int i = 0; i < dims.dimBlocks; i++)
+                {
                     gpu_result += h_blocks[i];
+                }
             }
 
             CUDA(cudaEventRecord(stop, 0));
